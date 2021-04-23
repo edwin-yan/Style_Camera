@@ -1,13 +1,14 @@
 # Style Camera CycleGAN
 
-Apply Neural Style Transfer on Camera Images.
+Apply Neural Style Transfer on live web camera streams. Styles from Cezanne, Monet, Ukiyoe and Vangogh are provided.
 
-Please be advised that this project used the CycleGAN model from https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix.
+Please be advised that this project uses the CycleGAN model from https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix.
 
 ## Environment
 There are two ways to reproduce my environment:
 1. **conda_env.yml** - Conda Environment Export
 2. **requirements.txt** - Pip Packages Export
+
 _**Disclaimer**: This code is developed and tested on Windows Environment, although it should work on Linux as well_
 
 ## Quick Start
