@@ -2,7 +2,7 @@ import model
 import torch
 from functools import partial
 import torch.nn as nn
-from util import get_transform_simplified
+from util import get_transform
 import cv2
 from PIL import Image
 import time
@@ -10,7 +10,20 @@ import argparse
 
 
 def __patch_instance_norm_state_dict(state_dict, module, keys, i=0):
-    """Fix InstanceNorm checkpoints incompatibility (prior to 0.4)"""
+    """
+    Adapted from original code to fix InstanceNorm checkpoints incompatibility (prior to 0.4) to use the weights
+
+    Parameters
+    ----------
+    state_dict  -- The metadata
+    module      -- The saved weights
+    keys        -- The keys in the state dictionary
+    i           -- the index of the first key to start with
+
+    Returns
+    -------
+    """
+
     key = keys[i]
     if i + 1 == len(keys):  # at the end, pointing to a parameter/buffer
         if module.__class__.__name__.startswith('InstanceNorm') and (key == 'running_mean' or key == 'running_var'):
@@ -23,7 +36,18 @@ def __patch_instance_norm_state_dict(state_dict, module, keys, i=0):
 
 
 def inv_normalize(img):
-    # Adding 0.1 to all normalization values since the model is trained (erroneously) without correct de-normalization
+    """
+    The image is normalized before it is fed into the model, so this function denormalize the image
+
+    Parameters
+    ----------
+    img - The normalized image
+
+    Returns
+    -------
+    img - The denormalized image
+    """
+
     mean = torch.Tensor([0.5, 0.5, 0.5]).to(device)
     std = torch.Tensor([0.5, 0.5, 0.5]).to(device)
 
@@ -32,7 +56,19 @@ def inv_normalize(img):
 
 
 def transfer_style(image):
-    transformed_image = get_transform_simplified()(image)
+    """
+    Apply all transformations, inference based on the trained model, then return the denormalized the image
+
+    Parameters
+    ----------
+    image - The original image
+
+    Returns
+    -------
+    image - the new image with neural style applied
+    """
+
+    transformed_image = get_transform()(image)
     image_device = transformed_image.unsqueeze(0).to(device)
 
     with torch.no_grad():
@@ -43,6 +79,19 @@ def transfer_style(image):
 
 
 def load_model(pretrained_dir, device):
+    """
+    Load pretrained model. Pretrained models are adopted from: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix
+
+    Parameters
+    ----------
+    pretrained_dir - The paths to the pretrained models
+    device         - The default device.
+
+    Returns
+    -------
+    netG           - The weights of the model
+    """
+
     print("Loading Model....")
     norm = partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
     netG = model.ResnetGenerator(input_nc=3,
@@ -66,6 +115,18 @@ def load_model(pretrained_dir, device):
     return netG
 
 def determine_resolution(arg):
+    """
+    Set the resolution of the images based on the parameters
+
+    Parameters
+    ----------
+    arg - the parsed arguments
+
+    Returns
+    -------
+
+    """
+
     def make_1080p(cap):
         cap.set(3, 1920)
         cap.set(4, 1080)
@@ -87,7 +148,15 @@ def determine_resolution(arg):
 
 
 def style_camera():
-    print('Initializing Camera...this may take a few seconds...')
+    """
+    The main function to open web camera via CV2, then apply neural style transfer
+
+    Returns
+    -------
+
+    """
+
+    print('Initializing... It may take a few seconds to open the camera and load the model...')
     vc = cv2.VideoCapture(0)
     set_resolution(vc)
 
@@ -120,6 +189,14 @@ def style_camera():
 
 
 def process_args():
+    """
+    Parse the input arguments
+
+    Returns
+    -------
+
+    """
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--style', type=str, default='cezanne', help='Styles to apply. Options are cezanne, monet, ukiyoe and vangogh')
     parser.add_argument('--resolution', type=str, default='720p', help='Camera Resolution. Options are 480P, 720P and 1080P. WARNING: 1080P may require high-end GPU')

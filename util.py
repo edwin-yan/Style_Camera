@@ -2,6 +2,20 @@ import torchvision.transforms as transforms
 from PIL import Image
 
 def __make_power_2(img, base, method=Image.BICUBIC):
+    """
+    Resize the image
+
+    Parameters
+    ----------
+    img    - the input image
+    base   - the base to be powered on
+    method - the method to rescale the image
+
+    Returns
+    -------
+    if the height and width are already divisible by the base, return original image, otherwise, resize the image
+
+    """
     ow, oh = img.size
     h = int(round(oh / base) * base)
     w = int(round(ow / base) * base)
@@ -11,82 +25,43 @@ def __make_power_2(img, base, method=Image.BICUBIC):
     __print_size_warning(ow, oh, w, h)
     return img.resize((w, h), method)
 
-def __scale_width(img, target_size, crop_size, method=Image.BICUBIC):
-    ow, oh = img.size
-    if ow == target_size and oh >= crop_size:
-        return img
-    w = target_size
-    h = int(max(target_size * oh / ow, crop_size))
-    return img.resize((w, h), method)
-
-
-def __crop(img, pos, size):
-    ow, oh = img.size
-    x1, y1 = pos
-    tw = th = size
-    if (ow > tw or oh > th):
-        return img.crop((x1, y1, x1 + tw, y1 + th))
-    return img
-
-
-def __flip(img, flip):
-    if flip:
-        return img.transpose(Image.FLIP_LEFT_RIGHT)
-    return img
-
-
 def __print_size_warning(ow, oh, w, h):
-    """Print warning information about image size(only print once)"""
+    """
+    Print the warning image. It should only print once becasue the image will be resize multiple times every second (depends on the FPS).
+
+    Parameters
+    ----------
+    ow  - Original Width
+    oh  - Original Height
+    w   - Width
+    h   - Height
+
+    Returns
+    -------
+    """
+
     if not hasattr(__print_size_warning, 'has_printed'):
-        print("The image size needs to be a multiple of 4. "
-              "The loaded image size was (%d, %d), so it was adjusted to "
-              "(%d, %d). This adjustment will be done to all images "
-              "whose sizes are not multiples of 4" % (ow, oh, w, h))
+        print(f"The image size needs to be a multiple of 4. The loaded image size was ({ow}, {oh}), so it was adjusted to ({w}, {h}). This adjustment will be done to all images whose sizes are not multiples of 4")
         __print_size_warning.has_printed = True
 
+def get_transform(method=Image.BICUBIC, convert=True):
+    """
+    Prepare Images to feed into the model. This is step is necessary to match to the training data used for the model.
+    It is simplified based on: https://raw.githubusercontent.com/junyanz/pytorch-CycleGAN-and-pix2pix/f13aab8148bd5f15b9eb47b690496df8dadbab0c/data/base_dataset.py
 
-# def get_transform(opt, params=None, grayscale=False, method=Image.BICUBIC, convert=True):
-#     transform_list = []
-#     if grayscale:
-#         transform_list.append(transforms.Grayscale(1))
-#     if 'resize' in opt.preprocess:
-#         osize = [opt.load_size, opt.load_size]
-#         transform_list.append(transforms.Resize(osize, method))
-#     elif 'scale_width' in opt.preprocess:
-#         transform_list.append(transforms.Lambda(lambda img: __scale_width(img, opt.load_size, opt.crop_size, method)))
-#
-#     if 'crop' in opt.preprocess:
-#         if params is None:
-#             transform_list.append(transforms.RandomCrop(opt.crop_size))
-#         else:
-#             transform_list.append(transforms.Lambda(lambda img: __crop(img, params['crop_pos'], opt.crop_size)))
-#
-#     if opt.preprocess == 'none':
-#         transform_list.append(transforms.Lambda(lambda img: __make_power_2(img, base=4, method=method)))
-#
-#     if not opt.no_flip:
-#         if params is None:
-#             transform_list.append(transforms.RandomHorizontalFlip())
-#         elif params['flip']:
-#             transform_list.append(transforms.Lambda(lambda img: __flip(img, params['flip'])))
-#
-#     if convert:
-#         transform_list += [transforms.ToTensor()]
-#         if grayscale:
-#             transform_list += [transforms.Normalize((0.5,), (0.5,))]
-#         else:
-#             transform_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-#     return transforms.Compose(transform_list)
+    Parameters
+    ----------
+    method      - the resize method
+    convert     - whether to normalize image
 
+    Returns
+    -------
+    Return a list of jobs to apply
+    """
 
-def get_transform_simplified(grayscale=False, method=Image.BICUBIC, convert=True):
-    transform_list = []
-    transform_list.append(transforms.Lambda(lambda img: __make_power_2(img, base=4, method=method)))
+    transform_list = [transforms.Lambda(lambda img: __make_power_2(img, base=4, method=method))]
     if convert:
         transform_list += [transforms.ToTensor()]
-        if grayscale:
-            transform_list += [transforms.Normalize((0.5,), (0.5,))]
-        else:
-            transform_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+        transform_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
     return transforms.Compose(transform_list)
 
