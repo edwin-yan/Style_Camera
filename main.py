@@ -114,6 +114,7 @@ def load_model(pretrained_dir, device):
     print("Model Loaded...")
     return netG
 
+
 def determine_resolution(arg):
     """
     Set the resolution of the images based on the parameters
@@ -147,14 +148,29 @@ def determine_resolution(arg):
         return make_480p
 
 
-def style_camera():
+def style_camera(fps):
     """
-    The main function to open web camera via CV2, then apply neural style transfer
+    The main function to open web camera via OpenCV2, then apply neural style transfer
 
     Returns
     -------
 
     """
+
+    def style_camera_show():
+        """
+        Transform Style on images, then show it via OpenCV2
+
+        Returns
+        -------
+
+        """
+        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img_pil = Image.fromarray(image)
+        new_image = transfer_style(img_pil)
+        new_image = cv2.cvtColor(new_image, cv2.COLOR_RGB2BGR)
+        cv2.putText(new_image, f"FPS: {frame_rate: .1f}", (7, 70), font, 3, (255, 255, 255), 3, cv2.LINE_AA)
+        cv2.imshow('style', new_image)
 
     print('Initializing... It may take a few seconds to open the camera and load the model...')
     vc = cv2.VideoCapture(0)
@@ -165,24 +181,30 @@ def style_camera():
     else:
         rval = False
 
-    frame_rate, prev = 10, 0
+    if fps < 30:
+        frame_rate, cap_fps = fps, True
+    else:
+        frame_rate, cap_fps = 0, False
+
+    prev, font = 0, cv2.FONT_HERSHEY_SIMPLEX
 
     while rval:
         cv2.imshow("preview", frame)
-        time_elapsed = time.time() - prev
         rval, frame = vc.read()
+        curr = time.time()
+        time_elapsed = curr - prev
+        frame_rate = 1 / time_elapsed
+        prev = curr
 
         key = cv2.waitKey(40)
         if key == 27:  # exit on ESC
             break
 
-        if time_elapsed > 1. / frame_rate:
-            prev = time.time()
-            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img_pil = Image.fromarray(image)
-            new_image = transfer_style(img_pil)
-            new_image = cv2.cvtColor(new_image, cv2.COLOR_RGB2BGR)
-            cv2.imshow('style', new_image)
+        if cap_fps:
+            if time_elapsed > 1. / fps:
+                style_camera_show()
+        else:
+            style_camera_show()
 
     cv2.destroyWindow("preview")
     cv2.destroyWindow("style")
@@ -200,19 +222,24 @@ def process_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--style', type=str, default='cezanne', help='Styles to apply. Options are cezanne, monet, ukiyoe and vangogh')
     parser.add_argument('--resolution', type=str, default='720p', help='Camera Resolution. Options are 480P, 720P and 1080P. WARNING: 1080P may require high-end GPU')
+    parser.add_argument('--fps', type=int, default='30', help='Frame Per Second. If FPS is set to larger than 30, then FPS will not be limited')
+    parser.add_argument('--force_cpu', type=bool, default=False, help='Frame Per Second. If FPS is set to larger than 30, then FPS will not be limited')
     args = parser.parse_args()
-    print(f'Config:\nStyle: {args.style}\nCamera Resolution: {args.resolution}')
-    model_path = f'./styles/style_{args.style}.pth'
-    return model_path, determine_resolution(args.resolution)
+    print(f'Config:\nStyle: {args.style}\nCamera Resolution: {args.resolution}\nFPS: {args.fps if args.fps < 30 else "Unconstrained"}\nForce to use CPU Only: {args.force_cpu}\n')
+    model_path = f'./styles/style_{args.style.lower()}.pth'
+    return model_path, determine_resolution(args.resolution.lower()), args.fps, args.force_cpu
 
 
 if __name__ == "__main__":
-    if torch.cuda.is_available():
-        print("CUDA Device Detected. Use CUDA...")
-        pretrained_dir, set_resolution = process_args()
-        device = torch.device('cuda')
-        netG = load_model(pretrained_dir, device)
-        style_camera()
-    else:
-        print("Although it is possible to run on CPU technically, it may be very slow and laggy. Please run this program on CUDA device")
+    pretrained_dir, set_resolution, fps, cpu_only = process_args()
+    if ((not torch.cuda.is_available()) and (not cpu_only)):
+        print("It will be very slow and laggy to run on CPU. Please run this program on CUDA device. Otherwise, please set --force_cpu = True")
         exit(1)
+    else:
+        if cpu_only:
+            print("It is forced to run on CPU. Please not it might be very slow and laggy...")
+            device = torch.device('cpu')
+        else:
+            device = torch.device('cuda')
+        netG = load_model(pretrained_dir, device)
+        style_camera(fps)
